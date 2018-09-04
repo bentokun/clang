@@ -740,6 +740,34 @@ public:
   }
 };
 
+// Symbian OS target
+template <typename Target>
+class LLVM_LIBRARY_VISIBILITY SymbianOSTargetInfo : public OSTargetInfo<Target> {
+protected:
+  void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
+                    MacroBuilder &Builder) const override {
+    // Symbian OS Image Version 2 orignated from ELF, so keep this defined
+    Builder.defineMacro("__ELF__");
+
+    // Symbian OS platform macro
+    Builder.defineMacro("__SYMBIAN__");
+    Builder.defineMacro("__S60__ ");
+  }
+
+public:
+  explicit SymbianOSTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
+      : OSTargetInfo<Target>(Triple, Opts) {
+    this->WCharType = TargetInfo::UnsignedShort;
+
+    switch (Triple.getArch()) {
+    default:
+    case llvm::Triple::arm:
+      this->MCountName = "__mcount";
+      break;
+    }
+  }
+};
+
 } // namespace targets
 } // namespace clang
 #endif // LLVM_CLANG_LIB_BASIC_TARGETS_OSTARGETS_H

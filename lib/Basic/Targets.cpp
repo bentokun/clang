@@ -196,6 +196,8 @@ TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new RTEMSTargetInfo<ARMleTargetInfo>(Triple, Opts);
     case llvm::Triple::NaCl:
       return new NaClTargetInfo<ARMleTargetInfo>(Triple, Opts);
+    case llvm::Triple::Symbian:
+      return new SymbianOSTargetInfo<ARMleTargetInfo>(Triple, Opts);
     case llvm::Triple::Win32:
       switch (Triple.getEnvironment()) {
       case llvm::Triple::Cygnus:
