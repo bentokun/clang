@@ -752,6 +752,28 @@ protected:
     // Symbian OS platform macro
     Builder.defineMacro("__SYMBIAN__");
     Builder.defineMacro("__S60__ ");
+
+    // Symbian headers are heavily tied to GCC, this is just a hack
+    Builder.defineMacro("__GCC32__");
+    
+    switch (Triple.getArch()) {
+    default:
+    case llvm::Triple::arm: 
+    case llvm::Triple::thumb: {
+      switch (Triple.getEnvironment()) {
+      default:
+      case llvm::Triple::GNUEABI:
+      case llvm::Triple::GNUEABIHF:
+      case llvm::Triple::EABIHF:
+      case llvm::Triple::MuslEABI:
+      case llvm::Triple::MuslEABIHF:
+        Builder.defineMacro("__EABI__");
+        break;
+      }
+
+      break;
+    }
+    }
   }
 
 public:

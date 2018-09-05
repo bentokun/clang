@@ -2464,6 +2464,10 @@ def no_system_header_prefix : Joined<["--"], "no-system-header-prefix=">,
            "system header.">;
 def : Separate<["--"], "no-system-header-prefix">, Alias<no_system_header_prefix>;
 def s : Flag<["-"], "s">, Group<Link_Group>;
+def symbiancrt: Joined<["-"], "symbian-crt">, Group<Link_Group>, Flags<[DriverOption]>,
+  HelpText<"Flags the executable/dll as CRT">;
+def epocroot: Joined<["--"], "epocroot=">, Group<Link_Group>, Flags<[DriverOption]>,
+  HelpText<"Specify the EPOC root directory">;
 def target : Joined<["--"], "target=">, Flags<[DriverOption, CoreOption]>,
   HelpText<"Generate code for the given target">;
 def gcc_toolchain : Joined<["--"], "gcc-toolchain=">, Flags<[DriverOption]>,
