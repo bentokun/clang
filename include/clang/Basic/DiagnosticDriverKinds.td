@@ -215,6 +215,8 @@ def warn_drv_omp_offload_target_missingbcruntime : Warning<
   InGroup<OpenMPTarget>;
 def err_drv_bitcode_unsupported_on_toolchain : Error<
   "-fembed-bitcode is not supported on versions of iOS prior to 6.0">;
+def err_drv_invalid_epoc_version: Error<
+  "The provided --epocver is invalid. Supported types are: epoc9, epoc10">;
 
 def warn_O4_is_O3 : Warning<"-O4 is equivalent to -O3">, InGroup<Deprecated>;
 def warn_drv_optimization_value : Warning<"optimization level '%0' is not supported; using '%1%2' instead">,

@@ -61,11 +61,36 @@ void symbian::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_t);
   Args.AddAllArgs(CmdArgs, options::OPT_r);
 
+  CmdArgs.push_back("-e_E32Startup");
+
   if (Output.isFilename()) {
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
   } else {
     assert(Output.isNothing() && "Invalid output.");
+  }
+
+  if (!Args.hasArg(options::OPT_epoc_ignore_linker_lib_dir)) {
+    if (llvm::Optional<std::string> epocLinkerLibDir =
+            llvm::sys::Process::GetEnv("EPOCLIBSEARCHDIR")) {
+      long int parsePointer = 0;
+      long int lastMatch = 0;
+
+      while (parsePointer < epocLinkerLibDir->length()) {
+        if (epocLinkerLibDir->at(parsePointer++) == ';') {
+          CmdArgs.push_back(
+              Args.MakeArgString(std::string("-L") +
+                                 epocLinkerLibDir->substr(
+                                     lastMatch, parsePointer - lastMatch - 1)));
+
+          lastMatch = parsePointer;
+        }
+      }
+
+      CmdArgs.push_back(Args.MakeArgString(
+          std::string("-L") +
+          epocLinkerLibDir->substr(lastMatch, parsePointer - lastMatch + 1)));
+    }
   }
 
   getToolChain().AddFilePathLibArgs(Args, CmdArgs);
@@ -74,36 +99,72 @@ void symbian::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // them do it theirselves.
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs, JA);
 
+  llvm::Triple osTriple = getToolChain().getTriple();
+
+  const unsigned int epocVer = osTriple.getOSMajorVersion();
+
+  switch (epocVer) {
+  default:
+  case 0:
+  case 9:
+  case 10: {
+    CmdArgs.push_back(Args.MakeArgString("-lsupc++"));
+    break;
+  }
+  }
+
+  CmdArgs.push_back(Args.MakeArgString("-lgcc"));
+
+  // Prevent unwind errors
+  CmdArgs.push_back(Args.MakeArgString("-lgcc_eh"));
+
   // Link entry point (eexe.lib)
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
+    CmdArgs.push_back(Args.MakeArgString("-l:euser.dso"));
+
     if (Args.hasArg(options::OPT_symbiancrt) &&
         !Args.hasArg(options::OPT_shared)) {
       // Link this with ecrt0.lib (POSIX)
-      CmdArgs.push_back(Args.MakeArgString("ecrt0.lib"));
+      CmdArgs.push_back(Args.MakeArgString("-l:ecrt0.lib"));
     } else {
       if (Args.hasArg(options::OPT_shared)) {
         // This is a DLL, link it with edll.lib
-        CmdArgs.push_back(Args.MakeArgString("edll.lib"));
+        CmdArgs.push_back(Args.MakeArgString("-l:edll.lib"));
+        CmdArgs.push_back(Args.MakeArgString("-l:edllstub.lib"));
       } else {
-        CmdArgs.push_back(Args.MakeArgString("eexe.lib"));
+        CmdArgs.push_back(Args.MakeArgString("-l:eexe.lib"));
+        CmdArgs.push_back(Args.MakeArgString("-l:usrt2_2.lib"));
       }
     }
 
-    switch (getToolChain().getTriple().getEnvironment()) {
-      default:
-      case llvm::Triple::GNUEABI:
-      case llvm::Triple::GNUEABIHF:
-      case llvm::Triple::EABIHF:
-      case llvm::Triple::MuslEABI:
-      case llvm::Triple::MuslEABIHF: {
-        CmdArgs.push_back(Args.MakeArgString("drtaeabi.lib"));
-        break;
-      }
+    CmdArgs.push_back(Args.MakeArgString("-l:libc.dso"));
+    CmdArgs.push_back(Args.MakeArgString("-l:libstdcpp.dso"));
+
+    switch (osTriple.getEnvironment()) {
+    default:
+    case llvm::Triple::GNUEABI:
+    case llvm::Triple::GNUEABIHF:
+    case llvm::Triple::EABIHF:
+    case llvm::Triple::MuslEABI:
+    case llvm::Triple::MuslEABIHF: {
+      // Link with EABI libraries
+      CmdArgs.push_back(Args.MakeArgString("-l:drtaeabi.dso"));
+      CmdArgs.push_back(Args.MakeArgString("-l:dfpaeabi.dso"));
+      CmdArgs.push_back(Args.MakeArgString("-l:dfprvct2_2.dso"));
+      CmdArgs.push_back(Args.MakeArgString("-l:drtrvct2_2.dso"));
+      CmdArgs.push_back(Args.MakeArgString("-l:scppnwdl.dso"));
+
+      break;
+    }
     }
   }
 
-  const char *Exec = Args.MakeArgString(
-      getToolChain().GetProgramPath("arm-none-symbianelf-ld"));
+  CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
+
+  std::string programPath =
+      getToolChain().GetProgramPath("arm-none-symbianelf-ld");
+
+  const char *Exec = Args.MakeArgString(programPath);
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
@@ -122,6 +183,8 @@ Symbian::Symbian(const Driver &D, const llvm::Triple &Triple,
     epocRoot = llvm::sys::Process::GetEnv("EPOCROOT");
   }
 
+  std::string armPrefixEpoc = "armv5";
+
   if (epocRoot) {
     StringRef epocRootDir(*epocRoot);
 
@@ -133,14 +196,15 @@ Symbian::Symbian(const Driver &D, const llvm::Triple &Triple,
     addPathIfExists(D, epocReleaseDir, Paths);
 
     // Get the EPOC user libraries path
-    // TODO (bentokun): Don't hardcode armv5, else let users modify this
     SmallString<512> epocReleaseLibrariesDir(epocRootDir);
     llvm::sys::path::append(epocReleaseLibrariesDir,
-                            "epoc32/release/armv5/lib/");
+                            std::string("epoc32/release/") + armPrefixEpoc +
+                                "/lib/");
 
     SmallString<512> epocBootstrapLinkLibrariesDir(epocRootDir);
     llvm::sys::path::append(epocBootstrapLinkLibrariesDir,
-                            "epoc32/release/armv5/udeb/");
+                            std::string("epoc32/release/") + armPrefixEpoc +
+                                "/udeb/");
 
     addPathIfExists(D, epocReleaseLibrariesDir, Paths);
 
@@ -160,9 +224,7 @@ Tool *Symbian::buildAssembler() const {
   return new tools::symbian::Assembler(*this);
 }
 
-Tool *Symbian::buildLinker() const { 
-  return new tools::symbian::Linker(*this); 
-}
+Tool *Symbian::buildLinker() const { return new tools::symbian::Linker(*this); }
 
 void Symbian::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
                                         ArgStringList &CC1Args) const {
@@ -183,8 +245,17 @@ void Symbian::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
       // Symbian C++ we include stdapis in.
       SmallString<512> epocStdDir(*epocRoot);
       llvm::sys::path::append(epocStdDir, "epoc32/include/stdapis/");
+      
+      SmallString<512> epocStlPortDir(*epocRoot);
+      llvm::sys::path::append(epocStlPortDir, "epoc32/include/stdapis/stlport/");
+
+      SmallString<512> epocStlPortStlDir(*epocRoot);
+      llvm::sys::path::append(epocStlPortDir,
+                              "epoc32/include/stdapis/stlport/stl");
 
       addSystemInclude(DriverArgs, CC1Args, epocStdDir);
+      addSystemInclude(DriverArgs, CC1Args, epocStlPortDir);
+      addSystemInclude(DriverArgs, CC1Args, epocStlPortStlDir);
     }
   }
 
@@ -198,11 +269,4 @@ void Symbian::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
 void Symbian::addLibStdCxxIncludePaths(
     const llvm::opt::ArgList &DriverArgs,
     llvm::opt::ArgStringList &CC1Args) const {
-  if (epocRoot) {
-    SmallString<512> stlEpocPath(*epocRoot);
-    llvm::sys::path::append(stlEpocPath, 
-                            "epoc32/include/stdapis/stlport/");
-
-    addSystemInclude(DriverArgs, CC1Args, stlEpocPath);
-  }
 }

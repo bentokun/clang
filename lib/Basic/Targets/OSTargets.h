@@ -751,11 +751,16 @@ protected:
 
     // Symbian OS platform macro
     Builder.defineMacro("__SYMBIAN__");
+    Builder.defineMacro("__SYMBIAN32__");
     Builder.defineMacro("__S60__ ");
 
     // Symbian headers are heavily tied to GCC, this is just a hack
     Builder.defineMacro("__GCC32__");
+    Builder.defineMacro("__GCCE__");
     
+    // God damned morden C++
+    Builder.defineMacro("_WCHAR_T_DECLARED");
+
     switch (Triple.getArch()) {
     default:
     case llvm::Triple::arm: 
@@ -773,6 +778,15 @@ protected:
 
       break;
     }
+    }
+
+    if (Triple.getOSMajorVersion() >= 9 || Triple.getOSMajorVersion() == 0) {
+      Builder.defineMacro("__EKA2__");
+      Builder.defineMacro("__LEAVE_EQUALS_THROW__");
+      Builder.defineMacro("__SUPPORT_CPP_EXCEPTIONS__");
+
+      // Oh no, which version wouldn't support Unicode?
+      Builder.defineMacro("_UNICODE");
     }
   }
 
