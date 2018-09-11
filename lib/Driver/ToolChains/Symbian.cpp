@@ -159,6 +159,10 @@ void symbian::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // Prevent RunThread relocationg ignore
+  CmdArgs.push_back(Args.MakeArgString("--target1-abs"));
+  CmdArgs.push_back(Args.MakeArgString("-shared"));
+
   CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
 
   std::string programPath =

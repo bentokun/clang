@@ -583,7 +583,6 @@ protected:
       Builder.defineMacro("_WIN64");
     if (Triple.isWindowsGNUEnvironment())
       addMinGWDefines(Triple, Opts, Builder);
-
   }
   void getVisualStudioDefines(const LangOptions &Opts,
                               MacroBuilder &Builder) const {
@@ -742,7 +741,8 @@ public:
 
 // Symbian OS target
 template <typename Target>
-class LLVM_LIBRARY_VISIBILITY SymbianOSTargetInfo : public OSTargetInfo<Target> {
+class LLVM_LIBRARY_VISIBILITY SymbianOSTargetInfo
+    : public OSTargetInfo<Target> {
 protected:
   void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
                     MacroBuilder &Builder) const override {
@@ -757,14 +757,16 @@ protected:
     // Symbian headers are heavily tied to GCC, this is just a hack
     Builder.defineMacro("__GCC32__");
     Builder.defineMacro("__GCCE__");
-    
+
     // God damned morden C++
     Builder.defineMacro("_WCHAR_T_DECLARED");
 
     switch (Triple.getArch()) {
     default:
-    case llvm::Triple::arm: 
+    case llvm::Triple::arm:
     case llvm::Triple::thumb: {
+      Builder.defineMacro("__MARM__");
+
       switch (Triple.getEnvironment()) {
       default:
       case llvm::Triple::GNUEABI:
@@ -787,11 +789,15 @@ protected:
 
       // Oh no, which version wouldn't support Unicode?
       Builder.defineMacro("_UNICODE");
+      Builder.defineMacro("__S60_50__ ");
+      Builder.defineMacro("__S60_3X__");
+      Builder.defineMacro("__SERIES60_3X__");
     }
   }
 
 public:
-  explicit SymbianOSTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
+  explicit SymbianOSTargetInfo(const llvm::Triple &Triple,
+                               const TargetOptions &Opts)
       : OSTargetInfo<Target>(Triple, Opts) {
     this->WCharType = TargetInfo::UnsignedShort;
 
